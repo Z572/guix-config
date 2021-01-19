@@ -77,10 +77,11 @@ use, login interface with a modern yet classy touch.")
     (license license:gpl3)))
 
 (define-public google-hosts
-  (let ((commit "8ff01be91c4a70604f83e5cf0a3dd595fe8868b0"))
+  (let ((commit "8ff01be91c4a70604f83e5cf0a3dd595fe8868b0")
+        (revision "1"))
     (package
       (name "googlehosts")
-      (version "1")
+      (version (git-version "0.0.0" revision commit))
       (source
        (origin
          (method git-fetch)
