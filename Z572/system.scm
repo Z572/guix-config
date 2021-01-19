@@ -166,7 +166,7 @@ use, login interface with a modern yet classy touch.")
      (bootloader-configuration
       (bootloader grub-efi-bootloader)
       (target "/boot/efi")
-      (keyboard-layout %z-keyboard)))
+      (keyboard-layout keyboard-layout)))
     (file-systems
      (append
       %z-file-systems
@@ -328,7 +328,7 @@ use, login interface with a modern yet classy touch.")
       (service zram-device-service-type)
       (set-xorg-configuration
        (xorg-configuration
-        (keyboard-layout %z-keyboard)) sddm-service-type)
+        (keyboard-layout keyboard-layout)) sddm-service-type)
       (service sddm-service-type
                (sddm-configuration
                 (theme "chili")))
