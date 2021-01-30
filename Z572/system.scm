@@ -45,7 +45,7 @@
   #:use-module (nongnu packages linux)
   #:use-module (flat packages emacs))
 
-(define chili-sddm-theme
+(define-public chili-sddm-theme
   (package
     (name "chili-sddm-theme")
     (version "0.1.5")
@@ -99,22 +99,15 @@ use, login interface with a modern yet classy touch.")
       (license "file://LICENSE"))))
 
 (define-public %z-emacs
-  (let* ((z-inherit emacs-native-comp)
-         (z-revision "1")
-         (z-commit "71e93eda873a775c016a9871a2e245d8662b69dd")
-         (z-checksum "15z5fvqvvrch57lcn560y2a5wgj0yg954wl5qdgibf906yk5q86y"))
-    (package/inherit
-     z-inherit
-     (name "fast-emacs")
-     (version (git-version "28.0.50" z-revision z-commit))
-     (source
-      (origin
-        (inherit (package-source z-inherit))
-        (uri (git-reference
-              (url "https://gitclone.com/github.com/geza-herman/emacs")
-              (commit z-commit)))
-        (file-name (git-file-name name version))
-        (sha256 (base32 z-checksum)))))))
+  (let* ((z-inherit emacs-native-comp))
+    (package
+      (inherit z-inherit)
+      (source
+       (origin
+         (inherit (package-source z-inherit))
+         (uri (git-reference
+               (inherit (origin-uri (package-source z-inherit)))
+               (url "https://github.com/emacs-mirror/emacs"))))))))
 
 (define %z-substitute-urls
   (list
@@ -122,7 +115,7 @@ use, login interface with a modern yet classy touch.")
    ;;"https://mirror.c1r3u.xyz"
    ;;"https://guix-mirror.pengmeiyu.com"
    "https://mirror.guix.org.cn"
-   "https://mirror.brielmaier.net"))
+   #| "https://mirror.brielmaier.net" |#))
 
 (define %z-fonts
   '(fira-code
@@ -153,7 +146,7 @@ use, login interface with a modern yet classy touch.")
           (mount-point "/boot/efi")
           (type "vfat"))))
 
-(define z-system
+(define-public z-system
   (operating-system
     (host-name "Z572")
     (hosts-file
@@ -197,7 +190,7 @@ use, login interface with a modern yet classy touch.")
     (kernel-arguments
      (append '("modprobe.blacklist=ideapad_laptop")
              %default-kernel-arguments))
-    (label (format #f "~s ~s包"
+    (label (format #f "~s ~s"
                    (package-full-name (operating-system-kernel this-operating-system))
                    (length (operating-system-packages this-operating-system))))
     (users
@@ -216,6 +209,7 @@ use, login interface with a modern yet classy touch.")
      (append
       (map (package-input-rewriting/spec `(("emacs" . ,(const %z-emacs))))
            (list emacs-guix
+                 emacs-ws-butler
                  emacs-rime
                  emacs-exwm
                  %z-emacs
@@ -226,6 +220,8 @@ use, login interface with a modern yet classy touch.")
                  emacs-web-mode
                  emacs-which-key
                  emacs-nov-el
+                 emacs-repology
+                 ;;emacs-helpful
                  emacs-yasnippet-snippets
                  emacs-yasnippet
                  emacs-prescient
@@ -239,7 +235,6 @@ use, login interface with a modern yet classy touch.")
                  emacs-no-littering
                  emacs-page-break-lines
                  emacs-hl-todo
-                 chili-sddm-theme
                  emacs-doom-modeline
                  emacs-debbugs
                  emacs-blackout
@@ -258,6 +253,7 @@ use, login interface with a modern yet classy touch.")
                     symbol->string
                     (cut symbol-append 'font- <>))
            %z-fonts)
+      (list chili-sddm-theme)
       (map (compose specification->package+output
                     symbol->string)
            '(icecat
@@ -321,11 +317,15 @@ use, login interface with a modern yet classy touch.")
                              (requirement '())
                              (start #~(lambda ()
                                         (invoke
-                                         #$(file-append powertop "/sbin/powertop")
-                                         "--auto-tune")))
-                             (one-shot? #t)
-                             (respawn? #f))))
-      (service earlyoom-service-type)
+                                         (string-append #$powertop "/sbin/powertop")
+                                         "--auto-tune"))))))
+      (service earlyoom-service-type
+               (earlyoom-configuration
+                (avoid-regexp "emacs")
+                (prefer-regexp "icecat|chromium")))
+      ;; (service sysctl-service-type
+      ;;          (sysctl-configuration
+      ;;           (settings '(("net.ipv4.ip_forward" . "1")))))
       (service zram-device-service-type)
       (set-xorg-configuration
        (xorg-configuration
