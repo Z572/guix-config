@@ -1,37 +1,37 @@
 (define-module (Z572 system)
   #:autoload (guix build-system copy) (copy-build-system)
-  #:autoload (guix build-system emacs) (emacs-build-system)
-  #:autoload (guix build-system trivial) (trivial-build-system)
-  #:autoload (ice-9 pretty-print) (pretty-print)
   #:autoload (srfi srfi-26) (cut)
   #:autoload (srfi srfi-1) (first)
+  #:autoload (nongnu packages linux) (linux linux-firmware)
   #:use-module ((guix licenses) #:prefix license:)
-  #:use-module (gnu)
-  #:use-module (gnu packages)
-  ;; #:use-module (gnu packages base)
-  ;; #:use-module (gnu packages bash)
-  ;; #:use-module (gnu packages certs)
   #:use-module (gnu packages cmake)
+  #:use-module (gnu packages dns)
   #:use-module (gnu packages emacs)
   #:use-module (gnu packages emacs-xyz)
+  #:use-module (gnu packages fonts)
+  #:use-module (gnu packages haskell)
+  #:use-module (gnu packages haskell-check)
+  #:use-module (gnu packages haskell-xyz)
   #:use-module (gnu packages linux)
-  ;; #:use-module (gnu packages mpd)
-  ;; #:use-module (gnu packages shells)
-  ;; #:use-module (gnu packages webkit)
-  ;; #:use-module (gnu packages wm)
+  #:use-module (gnu packages package-management)
+  #:use-module (gnu packages samba)
+  #:use-module (gnu packages wm)
+  #:use-module (gnu packages)
   #:use-module (gnu services admin)
   #:use-module (gnu services audio)
   #:use-module (gnu services desktop)
+  #:use-module (gnu services dns)
   #:use-module (gnu services linux)
   #:use-module (gnu services mcron)
   #:use-module (gnu services networking)
   #:use-module (gnu services pm)
+  #:use-module (gnu services sddm)
   #:use-module (gnu services shepherd)
   #:use-module (gnu services sound)
   #:use-module (gnu services virtualization)
   #:use-module (gnu services xorg)
-  #:use-module (gnu services sddm)
   #:use-module (gnu system nss)
+  #:use-module (gnu)
   #:use-module (guix channels)
   #:use-module (guix download)
   #:use-module (guix git-download)
@@ -41,40 +41,24 @@
   #:use-module (guix packages)
   #:use-module (guix store)
   #:use-module (guix transformations)
-  #:use-module (guix utils)
-  #:use-module (nongnu packages linux)
-  #:use-module (flat packages emacs))
+  #:use-module (guix utils))
 
-(define-public chili-sddm-theme
-  (package
-    (name "chili-sddm-theme")
-    (version "0.1.5")
-    (source (origin
-              (method git-fetch)
-              (uri (git-reference
-                    (url "https://github.com/MarianArlt/sddm-chili")
-                    (commit version)))
-              (file-name (git-file-name name version))
-              (sha256
-               (base32
-                "036fxsa7m8ymmp3p40z671z163y6fcsa9a641lrxdrw225ssq5f3"))))
-    (build-system trivial-build-system)
-    (arguments
-     `(#:modules ((guix build utils))
-       #:builder
-       (begin
-         (use-modules (guix build utils))
-         (let* ((out (assoc-ref %outputs "out"))
-                (sddm-themes (string-append out "/share/sddm/themes")))
-           (mkdir-p sddm-themes)
-           (copy-recursively (assoc-ref %build-inputs "source")
-                             (string-append sddm-themes "/chili"))))))
-    (home-page "https://github.com/MarianArlt/sddm-chili")
-    (synopsis "Chili theme for SDDM")
-    (description "Spice up the login experience for your users, your family and
-yourself.  Chili reduces all the clutter and leaves you with a clean, easy to
-use, login interface with a modern yet classy touch.")
-    (license license:gpl3)))
+(define-public my-xmonad
+  (package/inherit
+   xmonad
+   (name "my-xmonad")
+   (inputs
+    `(,@(package-inputs xmonad)
+      ("ghc" ,ghc)))
+   (arguments
+    (substitute-keyword-arguments (package-arguments xmonad)
+      ((#:phases phases)
+       `(modify-phases ,phases
+          (add-after 'install 'wrap-executable
+            (lambda* (#:key inputs outputs #:allow-other-keys)
+              (wrap-program (string-append (assoc-ref outputs "out") "/bin/xmonad")
+                `("PATH" ":" prefix
+                  (,(string-append (assoc-ref inputs "ghc") "/bin"))))))))))))
 
 (define-public google-hosts
   (let ((commit "8ff01be91c4a70604f83e5cf0a3dd595fe8868b0")
@@ -98,24 +82,12 @@ use, login interface with a modern yet classy touch.")
       (description "hosts of googlehosts")
       (license "file://LICENSE"))))
 
-(define-public %z-emacs
-  (let* ((z-inherit emacs-native-comp))
-    (package
-      (inherit z-inherit)
-      (source
-       (origin
-         (inherit (package-source z-inherit))
-         (uri (git-reference
-               (inherit (origin-uri (package-source z-inherit)))
-               (url "https://github.com/emacs-mirror/emacs"))))))))
-
 (define %z-substitute-urls
   (list
    "https://mirror.sjtu.edu.cn/guix"
    ;;"https://mirror.c1r3u.xyz"
    ;;"https://guix-mirror.pengmeiyu.com"
-   "https://mirror.guix.org.cn"
-   #| "https://mirror.brielmaier.net" |#))
+   "https://mirror.guix.org.cn"))
 
 (define %z-fonts
   '(fira-code
@@ -132,19 +104,21 @@ use, login interface with a modern yet classy touch.")
 
 (define %z-file-systems
   (list (file-system
+          (device
+           (uuid "67F9-D714" 'fat))
+          (mount-point "/boot/efi")
+          (type "vfat"))
+        (file-system
           (device (file-system-label "my-root"))
           (mount-point "/")
-          (type "ext4"))
+          (type "btrfs")
+          (flags '(no-atime))
+          (options "compress=zstd:7"))
         (file-system
           (device
            (uuid "8e6e73cf-4af1-464c-a3a4-f8292a04e3f1" 'ext4))
           (mount-point "/home")
-          (type "ext4"))
-        (file-system
-          (device
-           (uuid "9196-0CB1" 'fat))
-          (mount-point "/boot/efi")
-          (type "vfat"))))
+          (type "ext4"))))
 
 (define-public z-system
   (operating-system
@@ -165,6 +139,8 @@ use, login interface with a modern yet classy touch.")
      (append
       %z-file-systems
       %base-file-systems))
+    (swap-devices
+     (list "/dev/nvme0n1p3"))
     (kernel
      (package
        (inherit linux)
@@ -177,15 +153,12 @@ use, login interface with a modern yet classy touch.")
     ;;(initrd microcode-initrd)
     (firmware (cons* (package
                        (inherit linux-firmware)
-                       (version "20201118")
+                       (version (package-version linux-firmware))
                        (source
                         (origin
-                          (method url-fetch)
+                          (inherit (package-source linux-firmware))
                           (uri (string-append "https://mirrors.tuna.tsinghua.edu.cn/kernel/firmware/"
-                                              "linux-firmware-" version ".tar.gz"))
-                          (sha256
-                           (base32
-                            "1dkyw5fa4mg053q0iy4yfjzrf8mkhjcsqw9ai6wcb5nn3prycbvh")))))
+                                              "linux-firmware-" version ".tar.gz")))))
                      %base-firmware))
     (kernel-arguments
      (append '("modprobe.blacklist=ideapad_laptop")
@@ -200,86 +173,52 @@ use, login interface with a modern yet classy touch.")
        (comment "x")
        (group "users")
        (supplementary-groups
-        (list "wheel" "netdev"
+        (list "wheel"
+              "netdev"
               "input" ;; "libvirt"
               "kvm"
-              "audio" "video")))
+              ;;"network"
+              "audio"
+              "video")))
       %base-user-accounts))
     (packages
      (append
-      (map (package-input-rewriting/spec `(("emacs" . ,(const %z-emacs))))
-           (list emacs-guix
-                 emacs-ws-butler
-                 emacs-rime
-                 emacs-exwm
-                 %z-emacs
-                 emacs-cmake-mode
-                 emacs-restart-emacs
-                 emacs-pdf-tools
-                 emacs-go-mode
-                 emacs-web-mode
-                 emacs-which-key
-                 emacs-nov-el
-                 emacs-repology
-                 ;;emacs-helpful
-                 emacs-yasnippet-snippets
-                 emacs-yasnippet
-                 emacs-prescient
-                 emacs-symbol-overlay
-                 emacs-company-box
-                 emacs-all-the-icons
-                 emacs-highlight-defined
-                 emacs-aggressive-indent
-                 emacs-emojify
-                 emacs-selectrum
-                 emacs-no-littering
-                 emacs-page-break-lines
-                 emacs-hl-todo
-                 emacs-doom-modeline
-                 emacs-debbugs
-                 emacs-blackout
-                 emacs-flycheck-guile
-                 emacs-flycheck
-                 emacs-macrostep
-                 emacs-nix-mode
-                 emacs-magit
-                 emacs-magit-todos
-                 emacs-diredfl
-                 emacs-rust-mode
-                 emacs-cider
-                 emacs-telega
-                 emacs-vterm))
       (map (compose specification->package+output
                     symbol->string
                     (cut symbol-append 'font- <>))
            %z-fonts)
-      (list chili-sddm-theme)
+      (list my-xmonad)
       (map (compose specification->package+output
                     symbol->string)
-           '(icecat
-             picom
+           '(ibus
+             ibus-rime
+             dconf
+
+             icecat
+             chili-sddm-theme
+
              ;;alacritty
              aria2
+             btrfs-progs
              iftop
+             pamixer
+             alsa-utils
+             gnupg
              you-get
-             fontmanager
-             inkscape
-             libreoffice
-             ccls
+             ;;fontmanager
              curl
              blender
              gcc-toolchain
              git
-             go-github-com-junegunn-fzf
+             fzf
+             ;;ungoogled-chromium
              imv
-             isync
-             okular
              fd
-             jq
-             iotop
+             ;;jq
+             ;;iotop
              cmake
              shepherd
-             krita
+
              make
 
              gvfs
@@ -287,18 +226,21 @@ use, login interface with a modern yet classy touch.")
              ncdu
              notmuch
              ripgrep
-             hsetroot
+
+             light
              tmux
              ;;screen
              file
+             ppp
              htop
              zsh
              ;;rofi
              unzip
              ;; virt-manager
              ;; virt-viewer
+             ghc-xmonad-contrib
+             ghc-rio
              xkill
-             ;;guix-simplyblack-sddm-theme
              progress
              qemu
              nss-certs))
@@ -310,15 +252,40 @@ use, login interface with a modern yet classy touch.")
       ;;          (qemu-binfmt-configuration
       ;;           (platforms (lookup-qemu-platforms "arm" "aarch64"))
       ;;           (guix-support? #t)))
+      (bluetooth-service)
       (service thermald-service-type)
-      (simple-service 'powertop shepherd-root-service-type
-                      (list (shepherd-service
-                             (provision '(powertop))
-                             (requirement '())
-                             (start #~(lambda ()
-                                        (invoke
-                                         (string-append #$powertop "/sbin/powertop")
-                                         "--auto-tune"))))))
+      (udev-rules-service
+       'backlight
+       (file->udev-rule
+        "90-backlight.rules"
+        (file-append
+         light
+         "/lib/udev/rules.d/90-backlight.rules")))
+      ;; (simple-service 'hnsd shepherd-root-service-type
+      ;;                 (list (shepherd-service
+      ;;                        (provision '(hnsd))
+      ;;                        (requirement '(networking))
+      ;;                        (start #~(make-forkexec-constructor
+      ;;                                  (list (string-append #$hnsd-release "/bin/hnsd")
+      ;;                                        "-p" "4"
+      ;;                                        "-r" "127.0.0.1:53")
+      ;;                                  #:pid-file "/var/run/hnsd.pid"))
+      ;;                        (stop #~(make-kill-destructor)))))
+      ;; (simple-service 'powertop shepherd-root-service-type
+      ;;                 (list (shepherd-service
+      ;;                        (provision '(powertop))
+      ;;                        (one-shot? #t)
+      ;;                        (start #~(make-forkexec-constructor
+      ;;                                  (list
+      ;;                                   #$(file-append powertop "/sbin/powertop") "--auto-tune")
+      ;;                                  #:pid-file "/var/run/powertop.pid")))))
+      ;; (simple-service 'powertop shepherd-root-service-type
+      ;;                 (list ))
+      ;; (service nix-service-type
+      ;;          (nix-configuration
+      ;;           (extra-config
+      ;;            '("substituters = https://mirrors.tuna.tsinghua.edu.cn/nix-channels/store/ https://cache.nixos.org/"))))
+      ;;(service dnsmasq-service-type)
       (service earlyoom-service-type
                (earlyoom-configuration
                 (avoid-regexp "emacs")
@@ -335,6 +302,10 @@ use, login interface with a modern yet classy touch.")
                 (theme "chili")))
       (delete (service gdm-service-type)
               (modify-services %desktop-services
+                ;; (network-manager-service-type config =>
+                ;;                               (network-manager-configuration
+                ;;                                (inherit config)
+                ;;                                (dns "none")))
                 (guix-service-type config =>
                                    (guix-configuration
                                     (inherit config)
