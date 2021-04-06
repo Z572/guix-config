@@ -207,12 +207,13 @@
              you-get
              ;;fontmanager
              curl
-             blender
+             ;; blender
              gcc-toolchain
              git
              fzf
              ;;ungoogled-chromium
              imv
+             xdg-utils
              fd
              ;;jq
              ;;iotop
@@ -224,7 +225,6 @@
              gvfs
              mpv
              ncdu
-             notmuch
              ripgrep
 
              light
