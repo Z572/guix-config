@@ -1,9 +1,9 @@
 (define-module (Z572 system)
   #:autoload (guix build-system copy) (copy-build-system)
   #:autoload (srfi srfi-26) (cut)
-  #:autoload (srfi srfi-1) (first)
   #:autoload (nongnu packages linux) (linux linux-firmware)
   #:use-module ((guix licenses) #:prefix license:)
+  #:use-module (srfi srfi-1)
   #:use-module (gnu packages cmake)
   #:use-module (gnu packages dns)
   #:use-module (gnu packages emacs)
@@ -18,6 +18,8 @@
   #:use-module (gnu packages wm)
   #:use-module (gnu packages)
   #:use-module (gnu services admin)
+  #:use-module (gnu services nix)
+  #:use-module (gnu services virtualization)
   #:use-module (gnu services audio)
   #:use-module (gnu services desktop)
   #:use-module (gnu services dns)
@@ -27,6 +29,7 @@
   #:use-module (gnu services pm)
   #:use-module (gnu services sddm)
   #:use-module (gnu services shepherd)
+  #:use-module (gnu services sysctl)
   #:use-module (gnu services sound)
   #:use-module (gnu services virtualization)
   #:use-module (gnu services xorg)
@@ -161,7 +164,8 @@
                                               "linux-firmware-" version ".tar.gz")))))
                      %base-firmware))
     (kernel-arguments
-     (append '("modprobe.blacklist=ideapad_laptop")
+     (append '("modprobe.blacklist=ideapad_laptop"
+               "intel_iommu=on")
              %default-kernel-arguments))
     (label (format #f "~s ~s"
                    (package-full-name (operating-system-kernel this-operating-system))
@@ -175,7 +179,8 @@
        (supplementary-groups
         (list "wheel"
               "netdev"
-              "input" ;; "libvirt"
+              "input"
+              ;;"libvirt"
               "kvm"
               ;;"network"
               "audio"
@@ -200,6 +205,7 @@
              ;;alacritty
              aria2
              btrfs-progs
+             bspwm
              iftop
              pamixer
              alsa-utils
@@ -236,9 +242,9 @@
              zsh
              ;;rofi
              unzip
-             ;; virt-manager
-             ;; virt-viewer
+             virt-manager
              ghc-xmonad-contrib
+             bridge-utils
              ghc-rio
              xkill
              progress
@@ -248,6 +254,8 @@
     (services
      (cons*
       (service tlp-service-type)
+      (service libvirt-service-type)
+      (service virtlog-service-type)
       ;; (service qemu-binfmt-service-type
       ;;          (qemu-binfmt-configuration
       ;;           (platforms (lookup-qemu-platforms "arm" "aarch64"))
@@ -281,19 +289,17 @@
       ;;                                  #:pid-file "/var/run/powertop.pid")))))
       ;; (simple-service 'powertop shepherd-root-service-type
       ;;                 (list ))
-      ;; (service nix-service-type
-      ;;          (nix-configuration
-      ;;           (extra-config
-      ;;            '("substituters = https://mirrors.tuna.tsinghua.edu.cn/nix-channels/store/ https://cache.nixos.org/"))))
+      (service nix-service-type
+               (nix-configuration
+                (extra-config
+                 '("substituters = https://mirrors.tuna.tsinghua.edu.cn/nix-channels/store/ https://cache.nixos.org/"))))
       ;;(service dnsmasq-service-type)
       (service earlyoom-service-type
                (earlyoom-configuration
                 (avoid-regexp "emacs")
                 (prefer-regexp "icecat|chromium")))
-      ;; (service sysctl-service-type
-      ;;          (sysctl-configuration
-      ;;           (settings '(("net.ipv4.ip_forward" . "1")))))
       (service zram-device-service-type)
+      (service ipfs-service-type)
       (set-xorg-configuration
        (xorg-configuration
         (keyboard-layout keyboard-layout)) sddm-service-type)
@@ -306,6 +312,11 @@
                 ;;                               (network-manager-configuration
                 ;;                                (inherit config)
                 ;;                                (dns "none")))
+                (sysctl-service-type config =>
+                                     (sysctl-configuration
+                                      (inherit config)
+                                      (settings (cons* '("net.ipv4.ip_forward" . "1")
+                                                       (sysctl-configuration-settings config)))))
                 (guix-service-type config =>
                                    (guix-configuration
                                     (inherit config)
