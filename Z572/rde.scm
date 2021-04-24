@@ -12,6 +12,7 @@
              (gnu home-services shells)
              (gnu home-services shellutils)
              (gnu home-services files)
+             (gnu home-services ssh)
              (gnu home-services emacs)
              (gnu home-services version-control))
 
@@ -78,18 +79,24 @@
                     (state-git (string-append (getenv "HOME") "/gits/rde")
                                "https://github.com/Z572/rde")))
 
-     ;; (service home-mcron-service-type
-     ;;          (home-mcron-configuration
-     ;;           (jobs
-     ;;            (list
-     ;;             #~(job
-     ;;                next-hour-from
-     ;;                (string-append #$(specification->package "isync") "/bin/mbsync" " -a")
-     ;;                ;; (lambda ()
-     ;;                ;;   (call-with-output-file
-     ;;                ;;       "/tmp/ffaf"
-     ;;                ;;     (cut display "Mcron service" <>)))
-     ;;                "mbsync")))))
+     (service home-mcron-service-type
+              (home-mcron-configuration
+               (jobs
+                (list
+                 #~(job
+                    '(next-minute
+                      (range 0 60 10))
+                    (lambda ()
+                      (system* #$(file-append (specification->package "isync") "/bin/mbsync")  "-a"))
+                    "mbsync")))))
+     (service home-ssh-service-type
+              (home-ssh-configuration
+               (extra-config
+                (list (ssh-host "guixcn"
+                                '((hostname . "shanghai.guix.org.cn")
+                                  (user . "Z572")
+                                  (port . 22)
+                                  (identity-file "~/.ssh/Z572_guixcn_ed25519")))))))
      (service home-git-service-type
               (home-git-configuration
                (ignore '(".envrc"))
@@ -104,7 +111,8 @@
      (service home-zsh-direnv-service-type)
      (service home-emacs-service-type
               (home-emacs-configuration
-               (package (specification->package+output "emacs-next"))
+               (package (specification->package+output "emacs-native-comp"))
+               (server-mode? #t)
                (elisp-packages (map (compose specification->package+output symbol->string)
                                     '(emacs-all-the-icons
                                       emacs-avy
