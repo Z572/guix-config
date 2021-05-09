@@ -57,11 +57,13 @@
     (substitute-keyword-arguments (package-arguments xmonad)
       ((#:phases phases)
        `(modify-phases ,phases
-          (add-after 'install 'wrap-executable
-            (lambda* (#:key inputs outputs #:allow-other-keys)
-              (wrap-program (string-append (assoc-ref outputs "out") "/bin/xmonad")
-                `("PATH" ":" prefix
-                  (,(string-append (assoc-ref inputs "ghc") "/bin"))))))))))))
+          (add-after 'unpack 'patch-ghc
+            (lambda* (#:key inputs #:allow-other-keys)
+              (substitute* "src/XMonad/Core.hs"
+                (("runProcess \"ghc\"")
+                 (format #f "runProcess ~S"
+                         (string-append
+                          (assoc-ref inputs "ghc") "/bin/ghc"))))))))))))
 
 (define-public google-hosts
   (let ((commit "8ff01be91c4a70604f83e5cf0a3dd595fe8868b0")

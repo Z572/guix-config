@@ -19,6 +19,39 @@
              (gnu home-services emacs)
              (gnu home-services version-control))
 
+(define-public z-emacs-rime
+  (let ((commit "519e6eb3b5e8e668c2835d27f54fcf5776242576")
+        (revision "1"))
+    (package
+      (inherit emacs-rime)
+      (name "emacs-rime")
+      (version (git-version "1.0.4" revision commit))
+      (source
+       (origin
+         (method git-fetch)
+         (uri (git-reference
+               (url "https://github.com/DogLooksGood/emacs-rime")
+               (commit commit)))
+         (file-name (git-file-name name version))
+         (sha256
+          (base32 "1q0kzdy3nxswsriq4fxr00wmw43x737dd7pnkf9g6v8hd7gsqkzc"))))
+      (build-system emacs-build-system)
+      (arguments
+       '(#:include (cons "\\.so$" %default-include)
+         #:phases
+         (modify-phases %standard-phases
+           (add-after 'unpack 'patch-rime-data-path
+             (lambda* (#:key inputs #:allow-other-keys)
+               (make-file-writable "rime.el")
+               (emacs-substitute-variables "rime.el"
+                 ("rime-share-data-dir"
+                  (string-append (assoc-ref inputs "rime-data")
+                                 "/share/rime-data")))
+               #t))
+           (add-before 'install 'build-emacs-module
+             (lambda _
+               (invoke "make" "lib")))))))))
+
 (define emacs-leaf-keywords
   (package
     (name "emacs-leaf-keywords")
@@ -44,6 +77,38 @@
 This package defines keywords that are dependent on an external package.
 
 More information is [[https://github.com/conao3/leaf-keywords.el][here]]
+")
+    (license #f)))
+
+(define emacs-winum
+  (package
+    (name "emacs-winum")
+    (version "20190911.1607")
+    (source
+     (origin
+       (method url-fetch)
+       (uri (string-append
+             "https://melpa.org/packages/winum-"
+             version
+             ".el"))
+       (sha256
+        (base32
+         "0dwg195ab9dyz53zqrj3i4mbz8isv69n8m0251fpl6va01rsrhgs"))))
+    (build-system emacs-build-system)
+    (propagated-inputs `(("emacs-dash" ,emacs-dash)))
+    (home-page "http://github.com/deb0ch/winum.el")
+    (synopsis
+     "Navigate windows and frames using numbers.")
+    (description
+     "
+Window numbers for Emacs: Navigate your windows and frames using numbers.
+
+This package is an extended and actively maintained version of the
+https://github.com/nschum/window-numbering.el package by Nikolaj Schumacher,
+with some ideas and code taken from https://github.com/abo-abo/ace-window.
+
+This version brings, among other things, support for number sets across multiple
+frames, giving the user a smoother experience of multi-screen Emacs.
 ")
     (license #f)))
 
@@ -230,7 +295,7 @@ shopt -s checkwinsize
                       emacs-repology
                       emacs-leetcode
                       emacs-restart-emacs
-                      emacs-rime
+                      z-emacs-rime
                       emacs-rust-mode
                       emacs-selectrum
                       emacs-shackle
