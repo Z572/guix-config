@@ -16,6 +16,7 @@
   #:use-module (gnu packages package-management)
   #:use-module (gnu packages samba)
   #:use-module (gnu packages wm)
+  #:use-module (nongnu system linux-initrd)
   #:use-module (gnu packages)
   #:use-module (gnu services admin)
   #:use-module (gnu services nix)
@@ -28,6 +29,7 @@
   #:use-module (gnu services networking)
   #:use-module (gnu services pm)
   #:use-module (gnu services sddm)
+  #:use-module (gnu services ssh)
   #:use-module (gnu services shepherd)
   #:use-module (gnu services sysctl)
   #:use-module (gnu services sound)
@@ -155,7 +157,7 @@
           (inherit (package-source linux))
           (uri (string-append "https://mirrors.aliyun.com/linux-kernel/v"
                               (version-major version)".x/linux-" version ".tar.xz"))))))
-    ;;(initrd microcode-initrd)
+    (initrd microcode-initrd)
     (firmware (cons* (package
                        (inherit linux-firmware)
                        (version (package-version linux-firmware))
@@ -263,6 +265,7 @@
       ;;           (platforms (lookup-qemu-platforms "arm" "aarch64"))
       ;;           (guix-support? #t)))
       (bluetooth-service)
+      (service openssh-service-type)
       (service thermald-service-type)
       (udev-rules-service
        'backlight
@@ -301,7 +304,7 @@
                 (avoid-regexp "emacs")
                 (prefer-regexp "icecat|chromium")))
       (service zram-device-service-type)
-      (service ipfs-service-type)
+      ;;(service ipfs-service-type)
       (set-xorg-configuration
        (xorg-configuration
         (keyboard-layout keyboard-layout)) sddm-service-type)

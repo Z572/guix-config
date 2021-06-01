@@ -1,16 +1,20 @@
 ;; -*- mode: scheme -*-
 (add-to-load-path (format #f "~a/.config/guix/config/" (getenv "HOME")))
 (use-modules (guix) (gnu)
+             (srfi srfi-1)
              (srfi srfi-26)
              (ice-9 format)
              (guix transformations))
-(use-package-modules linux emacs-xyz)
+(use-package-modules linux emacs-xyz guile guile-xyz gnupg rust-apps shellutils)
 (use-system-modules keyboard)
 (use-modules (Z572)
              (gnu home)
              ((guix licenses) #:prefix license:)
+             (guix gexp)
+             (guix modules)
              (guix git-download)
              (guix build-system emacs)
+             (guix build-system copy)
              (gnu home-services)
              (gnu home-services gnupg)
              (gnu home-services state)
@@ -18,10 +22,18 @@
              (gnu home-services password-utils)
              (gnu home-services shells)
              (gnu home-services shellutils)
+             (gnu home-services web-browsers)
+             (gnu home-services keyboard)
              (gnu home-services files)
              (gnu home-services ssh)
              (gnu home-services emacs)
-             (gnu home-services version-control))
+             (gnu home-services version-control)
+             (guix channels)
+             (flat packages emacs)
+             (gnu packages emacs)
+             (guix inferior))
+
+
 
 ;; Add Intimate information
 
@@ -183,6 +195,30 @@ frames, giving the user a smoother experience of multi-screen Emacs.
 ;;     (description "")
 ;;     (license #f)))
 
+(define-public emacs-bing-dict
+  (package
+    (name "emacs-bing-dict")
+    (version "20200216.110")
+    (source
+     (origin
+       (method url-fetch)
+       (uri (string-append
+             "https://melpa.org/packages/bing-dict-"
+             version
+             ".tar"))
+       (sha256
+        (base32
+         "04x5jjlzizwdqw5ikrqx4kfw1djr3hmm2k79sm3mf49mn87k18hd"))))
+    (build-system emacs-build-system)
+    (home-page
+     "https://github.com/cute-jumper/bing-dict.el")
+    (synopsis
+     "Minimalists' English-Chinese Bing dictionary")
+    (description
+     "A **minimalists'** Emacs extension to search http://www.bing.com/dict.
+Support English to Chinese and Chinese to English.")
+    (license #f)))
+
 (define-public emacs-meow
   (package
     (name "emacs-meow")
@@ -208,18 +244,65 @@ frames, giving the user a smoother experience of multi-screen Emacs.
 ")
     (license #f)))
 
+(define-public emacs-highlight-quoted
+  (package
+    (name "emacs-highlight-quoted")
+    (version "20140916.1822")
+    (source
+     (origin
+       (method url-fetch)
+       (uri (string-append
+             "https://melpa.org/packages/highlight-quoted-"
+             version
+             ".el"))
+       (sha256
+        (base32
+         "12d21lx97fh7hv00n02bfacn62g3dv99176fxdkrf7zkzcnpv75h"))))
+    (build-system emacs-build-system)
+    (home-page
+     "https://github.com/Fanael/highlight-quoted")
+    (synopsis
+     "Highlight Lisp quotes and quoted symbols")
+    (description
+     "Minor mode proving highlight of Lisp quotes and quoted symbols.
+")
+    (license #f)))
+
+(define-public emacs-cmake-mode
+  (package
+    (name "emacs-cmake-mode")
+    (version "20210104.1831")
+    (source
+     (origin
+       (method url-fetch)
+       (uri (string-append
+             "https://melpa.org/packages/cmake-mode-"
+             version
+             ".el"))
+       (sha256
+        (base32
+         "1qwfrz1n64g0mwzbh1ldqvav0qv19k4rd15mn6448vkkmrayygi2"))))
+    (build-system emacs-build-system)
+    (home-page "unspecified")
+    (synopsis "major-mode for editing CMake sources")
+    (description
+     "Provides syntax highlighting and indentation for CMakeLists.txt and
+*.cmake source files.
+
+Add this code to your .emacs file to use the mode:
+
+ (setq load-path (cons (expand-file-name \"/dir/with/cmake-mode\") load-path))
+ (require 'cmake-mode)\n
+;------------------------------------------------------------------------------
+")
+    (license #f)))
+
 (define sample-he
   (home-environment
-   ;; (keyboard-layout
-   ;;  (keyboard-layout
-   ;;   "us" #:options
-   ;;   '("ctrl:nocaps"
-   ;;     "shift:both_capslock")))
    (home-directory (getenv "HOME"))
    (packages
     (append
-     (list)
-     (map (compose specification->package+output symbol->string)
+     (map (compose list specification->package+output symbol->string)
           '(python-language-server
             python
             guile-hall
@@ -227,9 +310,11 @@ frames, giving the user a smoother experience of multi-screen Emacs.
             fontmanager
             fzf
             sbcl
+            rsync
             sbcl-slynk
             okular
             tree
+            syncthing
             translate-shell
             telegram-desktop
             tintin++
@@ -258,9 +343,7 @@ frames, giving the user a smoother experience of multi-screen Emacs.
         ("XMODIFIERS" . "@im=ibus")
         ("GUIX_GTK3_IM_MODULE_FILE" . "/run/current-system/profile/lib/gtk-3.0/3.0.0/immodules-gtk3.cache")
         ("GUIX_GTK2_IM_MODULE_FILE" . "/run/current-system/profile/lib/gtk-2.0/2.10.0/immodules-gtk2.cache")
-        ("GUIX_GITHUB_TOKEN" . ,z-guix-github-token
-         ;; "c108c863fe50516c1af2be509d0e8d04ddb3fbfe"
-         )))
+        ("GUIX_GITHUB_TOKEN" . ,z-guix-github-token)))
      (simple-service
       'set-brightness-on-login home-run-on-first-login-service-type
       #~(system* #$(file-append light "/bin/light") "-S" "90"))
@@ -303,6 +386,14 @@ frames, giving the user a smoother experience of multi-screen Emacs.
       'translate-shell-config home-files-service-type
       (list `("config/translate-shell/init.trans"
               ,(plain-file "translate-shell-conf" ":verbose false\n"))))
+     (simple-service
+      'mpv-config home-files-service-type
+      (list `("config/mpv/mpv.conf"
+              ,(plain-file "mpv.conf" "vo=x11,drm\n"))))
+     (simple-service
+      'mail-signature home-files-service-type
+      (list `("signature"
+              ,(plain-file "signature" z-email-signature))))
      (service home-state-service-type
               (list (state-git (string-append (getenv "HOME") "/gits/z-guix-bot")
                                "https://github.com/Z572/z-guix-bot")
@@ -316,8 +407,7 @@ frames, giving the user a smoother experience of multi-screen Emacs.
                  #~(job
                     '(next-minute
                       (range 0 60 10))
-                    (lambda ()
-                      (system* #$(file-append (specification->package "isync") "/bin/mbsync")  "-a"))
+                    "mbsync -a"
                     "mbsync")))))
      (service home-ssh-service-type
               (home-ssh-configuration
@@ -334,7 +424,7 @@ frames, giving the user a smoother experience of multi-screen Emacs.
                 `((pull ((rebase . #t)))
                   (user ((name . ,z-name)
                          (email . ,z-email)))
-                  (gpg ((program . ,(file-append (specification->package "gnupg") "/bin/gpg"))))
+                  (gpg ((program . ,(file-append gnupg "/bin/gpg"))))
                   (github ((user . ,z-name)))
                   (gitlab ((user . ,z-name)))))))
      (service home-zsh-autosuggestions-service-type)
@@ -344,44 +434,76 @@ frames, giving the user a smoother experience of multi-screen Emacs.
                 (list
                  (service-extension
                   home-profile-service-type
-                  (const (list (specification->package "direnv"))))
+                  (const (list direnv)))
                  (service-extension
                   home-bash-service-type
-                  (const (home-bash-extension
-                          (bashrc (list #~(format #f "eval \"$(~a hook bash)\""
-                                                  #$(file-append (specification->package "direnv") "/bin/direnv" )))))))))
+                  (const
+                   (home-bash-extension
+                    (bashrc (list
+                             #~(format #f "eval \"$(~a hook bash)\""
+                                       #$(file-append direnv "/bin/direnv")))))))))
                (default-value #f)
                (description "Enables @code{direnv} for @code{bash}.  Adds hook to
 @file{.bashrc} and installs a package in the profile.")))
-     ;; (service (service-type
-     ;;                (name 'home-bash-guile-bash)
-     ;;                (extensions
-     ;;                 (list
-     ;;                  (service-extension
-     ;;                   home-profile-service-type
-     ;;                   (const (list (specification->package "guile-bash"))))
-     ;;                  (service-extension
-     ;;                   home-bash-service-type
-     ;;                   (const (home-bash-extension
-     ;;                           (bashrc (list #~(string-append "enable -f " #$(file-append (specification->package "guile-bash") "/lib/bash/libguile-bash.so" )
-     ;;                                                          " scm
-     ;; "
-     ;;                                                          "GUILE_AUTO_COMPILE=0 GUILE_LOAD_PATH=$GUILE_LOAD_PATH:/home/x/.guix-home-environment/profile/share/guile/site/3.0 "
-     ;;                                                          "builtin scm \"$HOME\"/.bash.d/bash.scm"))))))))
-     ;;                (default-value #f)
-     ;;                (description "Enables @code{direnv} for @code{bash}.  Adds hook to
-     ;; @file{.bashrc} and installs a package in the profile.")))
+     (service (service-type
+               (name 'home-bash-zoxide)
+               (extensions
+                (list
+                 (service-extension
+                  home-profile-service-type
+                  (const (list zoxide)))
+                 (service-extension
+                  home-bash-service-type
+                  (const
+                   (home-bash-extension
+                    (bashrc (list
+                             #~(begin (use-modules (ice-9 format))
+                                      (format #f "alias zoxide=~a~%eval ~S"
+                                              #$(file-append zoxide "/bin/zoxide")
+                                              "$(zoxide init bash)")))))))))
+               (default-value #f)
+               (description "Enables @code{zoxide} for @code{bash}.  Adds hook to
+@file{.bashrc} and installs a package in the profile.")))
      (service home-zsh-direnv-service-type)
+     (service home-icecat-service-type
+              (home-icecat-configuration
+               (profiles
+                (list (icecat-profile
+                       (default? #t)
+                       (name "default")
+                       (id 0)
+                       (settings '((browser.urlbar.shortcuts.history . #t)
+                                   (browser.fullscreen.autohide . #t)
+                                   (toolkit.legacyUserProfileCustomizations.stylesheets . #t)
+                                   (svg.context-properties.content.enabled . #t)))
+                       (user-chrome "\
+#TabsToolbar { visibility: collapse !important; }")
+                       (user-content "\
+:root{ scrollbar-width: none !important; }"))
+                      (icecat-profile
+                       (default? #f)
+                       (name "github")
+                       (id 1)
+                       (settings '((browser.urlbar.shortcuts.bookmarks . #f)
+                                   (browser.fullscreen.autohide . #t))))))))
      (service home-bash-service-type
               (home-bash-configuration
                (guix-defaults? #t)
                (bashrc '("\
+case $- in
+   *i*) ;;
+     *) return;;
+esac
+HISTCONTROL=ignoreboth
+shopt -s histappend
+HISTSIZE=5000
+HISTFILEIZE=2000
 shopt -s autocd
 shopt -s checkwinsize
 "))))
      (service home-emacs-service-type
               (home-emacs-configuration
-               (package (specification->package+output "emacs-next"))
+               (package emacs-pgtk-native-comp)
                (server-mode? #t)
                (elisp-packages
                 (list emacs-all-the-icons
@@ -389,14 +511,13 @@ shopt -s checkwinsize
                       emacs-avy
                       emacs-blackout
                       emacs-cider
-                      ;;emacs-straight
-                                        ;emacs-cmake-mode
                       emacs-company-box
                       emacs-ctrlf
                       emacs-haskell-mode
                       emacs-leaf
                       emacs-debbugs
-                      emacs-meow
+                      ;;emacs-meow
+                      emacs-xr
                       emacs-dimmer
                       emacs-easy-escape
                       emacs-diredfl
@@ -408,16 +529,20 @@ shopt -s checkwinsize
                       emacs-flycheck-guile
                       emacs-go-mode
                       emacs-guix
+                      emacs-highlight-quoted
+                      emacs-cmake-mode
                       emacs-helpful
                       emacs-highlight-defined
                       emacs-hl-todo
                       emacs-macrostep
                       emacs-forge
                       emacs-magit
+                      emacs-calfw
                       emacs-magit-todos
                       emacs-nix-mode
                       emacs-no-littering
                       emacs-nov-el
+                      emacs-bing-dict
                       emacs-olivetti
                       emacs-page-break-lines
                       emacs-paren-face
@@ -457,13 +582,14 @@ SAVEHIST=10000
                 (home-gpg-configuration
                  (extra-config
                   '((cert-digest-algo . "SHA256")
-                    (default-preference-list . ("SHA512"
-                                                "SHA384"
-                                                "SHA256"
-                                                "SHA224"
-                                                "AES256"
-                                                "AES192"
-                                                "Uncompressed"))
+                    (default-preference-list
+                      . ("SHA512"
+                         "SHA384"
+                         "SHA256"
+                         "SHA224"
+                         "AES256"
+                         "AES192"
+                         "Uncompressed"))
                     (with-fingerprint? . #t)))))
                (gpg-agent-config
                 (home-gpg-agent-configuration
@@ -474,6 +600,11 @@ SAVEHIST=10000
                   '((max-cache-ttl . 86400)))))))
      (service home-password-store-service-type
               (home-password-store-configuration
-               (browserpass-native? #t)))))))
+               (browserpass-native? #t)))
+     (service home-keyboard-service-type
+              (keyboard-layout
+               "us" #:options
+               '("ctrl:nocaps"
+                 "shift:both_capslock")))))))
 
 sample-he
