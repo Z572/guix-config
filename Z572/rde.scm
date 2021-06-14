@@ -25,6 +25,7 @@
              (gnu home-services web-browsers)
              (gnu home-services keyboard)
              (gnu home-services files)
+             (gnu home-services fontutils)
              (gnu home-services ssh)
              (gnu home-services emacs)
              (gnu home-services version-control)
@@ -32,16 +33,6 @@
              (flat packages emacs)
              (gnu packages emacs)
              (guix inferior))
-
-
-
-;; Add Intimate information
-
-;; (save-module-excursion
-;;  (lambda () (primitive-load (format #f "~a/.config/guix/config/Z572.scm" (getenv "HOME"))
-;;                             ;; (string-append (dirname (current-filename)) "/../Z572.scm")
-;;                             )))
-
 
 (define-public z-emacs-rime
   (let ((commit "519e6eb3b5e8e668c2835d27f54fcf5776242576")
@@ -297,11 +288,58 @@ Add this code to your .emacs file to use the mode:
 ")
     (license #f)))
 
+(define-public z-emacs
+  (let ((commit "7673b6b9eb0af3add73e1614a466f142092b00aa")
+        (revision "0"))
+    (package
+      (inherit emacs-pgtk-native-comp)
+      (name "z-emacs")
+      (version (git-version "28.0.50" revision commit))
+      (source
+       (origin
+         (inherit (package-source emacs-pgtk-native-comp))
+         (method git-fetch)
+         (uri (git-reference
+               (url "https://git.savannah.gnu.org/git/emacs.git/")
+               (commit commit)))
+         (file-name (git-file-name name version))
+         (sha256
+          (base32
+           "1r1y3x570v1j5zcwp9qwz4dhcc03zp8xsfnz94wvrf9vr8c2ix24")))))))
+
+(define (make-rust-src rust)
+  (package
+    (inherit rust)
+    (name "rust-src")
+    (outputs '("out"))
+    (arguments
+     (substitute-keyword-arguments (package-arguments rust)
+       ((#:phases phases)
+        `(modify-phases ,phases
+           (delete 'configure)
+           (delete 'enable-codegen-tests)
+           (delete 'override-jemalloc)
+           (delete 'build)
+           (delete 'check)
+           (delete 'mkdir-prefix-paths)
+           (replace 'install
+             (lambda* (#:key outputs #:allow-other-keys)
+               (let ((src (string-append (assoc-ref outputs "out")
+                                         "/lib/rustlib/src/rust")))
+                 (mkdir-p src)
+                 (copy-recursively "./library" (string-append src "/library"))
+                 (copy-recursively "./src" (string-append src "/src"))
+                 ;; (copy-file "Cargo.toml" (string-append src "/Cargo.toml"))
+                 #t)))
+           (delete 'wrap-rustc)
+           (delete 'delete-install-logs)))))))
+
 (define sample-he
   (home-environment
    (home-directory (getenv "HOME"))
    (packages
     (append
+     (list (make-rust-src (specification->package "rust@1.52")))
      (map (compose list specification->package+output symbol->string)
           '(python-language-server
             python
@@ -309,7 +347,12 @@ Add this code to your .emacs file to use the mode:
             ;;guile-bash
             fontmanager
             fzf
+            tokei
             sbcl
+            neofetch
+            dunst
+            rust-analyzer
+            libnotify
             rsync
             sbcl-slynk
             okular
@@ -400,6 +443,7 @@ Add this code to your .emacs file to use the mode:
                     (state-git (string-append (getenv "HOME") "/gits/rde")
                                "https://github.com/Z572/rde")))
 
+     ;; (service home-fontconfig-service-type)
      (service home-mcron-service-type
               (home-mcron-configuration
                (jobs
@@ -407,16 +451,18 @@ Add this code to your .emacs file to use the mode:
                  #~(job
                     '(next-minute
                       (range 0 60 10))
-                    "mbsync -a"
+                    #$(file-append (specification->package "isync") "/bin/mbsync -a")
                     "mbsync")))))
      (service home-ssh-service-type
               (home-ssh-configuration
                (extra-config
-                (list (ssh-host "guixcn"
-                                '((hostname . "shanghai.guix.org.cn")
-                                  (user . "Z572")
-                                  (port . 22)
-                                  (identity-file "~/.ssh/Z572_guixcn_ed25519")))))))
+                (list (ssh-host
+                       (host "guixcn")
+                       (options
+                        '((hostname . "shanghai.guix.org.cn")
+                          (user . "Z572")
+                          (port . 22)
+                          (identity-file "~/.ssh/Z572_guixcn_ed25519"))))))))
      (service home-git-service-type
               (home-git-configuration
                (ignore '(".envrc"))
@@ -503,19 +549,15 @@ shopt -s checkwinsize
 "))))
      (service home-emacs-service-type
               (home-emacs-configuration
-               (package emacs-pgtk-native-comp)
+               (package z-emacs)
                (server-mode? #t)
                (elisp-packages
-                (list emacs-all-the-icons
-                      emacs-leaf-keywords
+                (list emacs-leaf-keywords
                       emacs-avy
                       emacs-blackout
-                      emacs-cider
-                      emacs-company-box
                       emacs-ctrlf
-                      emacs-haskell-mode
-                      emacs-leaf
                       emacs-debbugs
+
                       ;;emacs-meow
                       emacs-xr
                       emacs-dimmer
@@ -527,10 +569,10 @@ shopt -s checkwinsize
                       emacs-envrc
                       emacs-flycheck
                       emacs-flycheck-guile
-                      emacs-go-mode
                       emacs-guix
                       emacs-highlight-quoted
                       emacs-cmake-mode
+                      emacs-prescient
                       emacs-helpful
                       emacs-highlight-defined
                       emacs-hl-todo
@@ -539,15 +581,18 @@ shopt -s checkwinsize
                       emacs-magit
                       emacs-calfw
                       emacs-magit-todos
-                      emacs-nix-mode
+                      emacs-symbol-overlay
+                      emacs-telega
+                      emacs-vterm
+                      emacs-selectrum
                       emacs-no-littering
                       emacs-nov-el
                       emacs-bing-dict
                       emacs-olivetti
                       emacs-page-break-lines
                       emacs-paren-face
+                      emacs-go-mode
                       emacs-pdf-tools
-                      emacs-prescient
                       emacs-repology
                       emacs-winum
                       emacs-leetcode
@@ -555,12 +600,13 @@ shopt -s checkwinsize
                       emacs-restart-emacs
                       z-emacs-rime
                       emacs-rust-mode
-                      emacs-selectrum
+                      emacs-cider
+                      emacs-haskell-mode
+                      emacs-nix-mode
                       emacs-shackle
                       emacs-sly
-                      emacs-symbol-overlay
-                      emacs-telega
-                      emacs-vterm
+
+
                       emacs-web-mode
                       emacs-which-key
                       emacs-ws-butler

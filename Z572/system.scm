@@ -26,6 +26,7 @@
   #:use-module (gnu services dns)
   #:use-module (gnu services linux)
   #:use-module (gnu services mcron)
+  #:use-module (gnu services guix)
   #:use-module (gnu services networking)
   #:use-module (gnu services pm)
   #:use-module (gnu services sddm)
@@ -38,6 +39,7 @@
   #:use-module (gnu system nss)
   #:use-module (gnu)
   #:use-module (guix channels)
+  #:use-module (gnu services docker)
   #:use-module (guix download)
   #:use-module (guix git-download)
   #:use-module (guix inferior)
@@ -48,46 +50,19 @@
   #:use-module (guix transformations)
   #:use-module (guix utils))
 
-(define-public my-xmonad
-  (package/inherit
-   xmonad
-   (name "my-xmonad")
-   (inputs
-    `(,@(package-inputs xmonad)
-      ("ghc" ,ghc)))
-   (arguments
-    (substitute-keyword-arguments (package-arguments xmonad)
-      ((#:phases phases)
-       `(modify-phases ,phases
-          (add-after 'unpack 'patch-ghc
-            (lambda* (#:key inputs #:allow-other-keys)
-              (substitute* "src/XMonad/Core.hs"
-                (("runProcess \"ghc\"")
-                 (format #f "runProcess ~S"
-                         (string-append
-                          (assoc-ref inputs "ghc") "/bin/ghc"))))))))))))
-
-(define-public google-hosts
-  (let ((commit "8ff01be91c4a70604f83e5cf0a3dd595fe8868b0")
-        (revision "1"))
-    (package
-      (name "googlehosts")
-      (version (git-version "0.0.0" revision commit))
-      (source
-       (origin
-         (method git-fetch)
-         (uri (git-reference
-               (url "https://github.com/googlehosts/hosts")
-               (commit commit)))
-         (file-name (git-file-name name commit))
-         (sha256
-          (base32
-           "07bf23fp9l3xcw2jf3rxjkb4729948k6a3vgqvizs9v4glhwmj1b"))))
-      (build-system copy-build-system)
-      (home-page "https://github.com/googlehosts/hosts/")
-      (synopsis "hosts of googlehosts")
-      (description "hosts of googlehosts")
-      (license "file://LICENSE"))))
+(define-public z-xmonad
+  (package
+    (inherit xmonad)
+    (name "z-xmonad")
+    (arguments
+     (substitute-keyword-arguments (package-arguments xmonad)
+       ((#:phases phases)
+        `(modify-phases ,phases
+           (add-after 'unpack 'patch-ghc
+             (lambda* (#:key inputs #:allow-other-keys)
+               (substitute* "src/XMonad/Core.hs"
+                 (("runProcess \"ghc\"")
+                  (format #f "runProcess ~S" (which "ghc"))))))))))))
 
 (define %z-substitute-urls
   (list
@@ -130,10 +105,6 @@
 (define-public z-system
   (operating-system
     (host-name "Z572")
-    (hosts-file
-     (file-append
-      google-hosts
-      "/hosts-files/hosts"))
     (timezone "Asia/Shanghai")
     (locale "en_US.UTF-8")
     (keyboard-layout %z-keyboard)
@@ -186,6 +157,7 @@
               "input"
               ;;"libvirt"
               "kvm"
+              "docker"
               ;;"network"
               "audio"
               "video")))
@@ -196,7 +168,7 @@
                     symbol->string
                     (cut symbol-append 'font- <>))
            %z-fonts)
-      (list my-xmonad)
+      (list z-xmonad)
       (map (compose specification->package+output
                     symbol->string)
            '(ibus
@@ -257,6 +229,15 @@
       %base-packages))
     (services
      (cons*
+      (service guix-publish-service-type
+               (guix-publish-configuration
+                (port 8181)
+                (advertise? #t)
+                (host "0.0.0.0")
+                (cache "/var/cache/guix/publish")
+                (compression '(("lzip" 9)))
+                ;; (ttl (* 30 24 60 60))
+                ))
       (service tlp-service-type)
       (service libvirt-service-type)
       (service virtlog-service-type)
@@ -265,6 +246,7 @@
       ;;           (platforms (lookup-qemu-platforms "arm" "aarch64"))
       ;;           (guix-support? #t)))
       (bluetooth-service)
+      (service docker-service-type)
       (service openssh-service-type)
       (service thermald-service-type)
       (udev-rules-service
@@ -294,6 +276,10 @@
       ;;                                  #:pid-file "/var/run/powertop.pid")))))
       ;; (simple-service 'powertop shepherd-root-service-type
       ;;                 (list ))
+      (simple-service 'my-cron-jobs
+                      mcron-service-type
+                      (list #~(job '(next-hour '(2))
+                                   #$(file-append guix "/bin/guix" " gc -F 20G"))))
       (service nix-service-type
                (nix-configuration
                 (extra-config
@@ -343,7 +329,7 @@
 "))
                                                       %default-authorized-guix-keys))
                                     (extra-options
-                                     (list "-M 4" "-c 0"))))))))
+                                     (list "-M 4" "-c 0" "--discover=yes"))))))))
     (name-service-switch %mdns-host-lookup-nss)))
 
 z-system
